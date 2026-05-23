@@ -97,9 +97,9 @@ class CANFrameBuilder:
         fuel_raw    = int(max(0, min(255, 350 / 3.0)))
         cel_byte    = 0x01 if state.coolant_temp > 110 else 0x00
 
-        data = struct.pack('<H', rpm_raw + bytes([
+        data = struct.pack('<H', rpm_raw) + bytes([
             coolant_raw, throttle_raw, load_raw, fuel_raw, cel_byte, 0x00
-        ]))
+        ])
         return can.Message(arbitration_id=MSG_ENGINE, data=data, is_extended_id=False, timestamp=state.time)
     
     @staticmethod
