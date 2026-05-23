@@ -1,0 +1,181 @@
+VERSION ""
+
+NS_ :
+
+BS_:
+
+BU_: ECU_ENGINE ECU_BRAKE ECU_TRANSMISSION ECU_BODY ECU_DIAG TESTER
+
+/*
+ * =========================================================
+ * EXISTING VEHICLE DATA MESSAGES (your simulated ECUs)
+ * =========================================================
+ */
+
+BO_ 200 ENGINE_STATUS: 8 ECU_ENGINE
+ SG_ EngineRPM : 0|16@1+ (1.0,0.0) [0|6500] "rpm" ECU_TRANSMISSION,ECU_BODY
+ SG_ CoolantTemp : 16|8@1+ (1.0,-40.0) [-40|215] "degC" ECU_BODY
+ SG_ ThrottlePos : 24|8@1+ (1.0,0.0) [0|100] "%" ECU_TRANSMISSION
+ SG_ EngineLoad : 32|8@1+ (0.392,0.0) [0|100] "%" ECU_BODY
+ SG_ FuelPressure : 40|8@1+ (3.0,0.0) [0|765] "kPa" ECU_BODY
+ SG_ CheckEngineLight : 48|1@1+ (1.0,0.0) [0|1] "" ECU_BODY
+
+BO_ 420 VEHICLE_DYNAMICS: 8 ECU_BRAKE
+ SG_ VehicleSpeed : 0|16@1+ (0.005,0.0) [0|327.67] "km/h" ECU_ENGINE,ECU_BODY
+ SG_ BrakePressure : 16|8@1+ (0.1,0.0) [0|25.5] "MPa" ECU_BODY
+ SG_ LateralAccel : 24|8@1- (0.1,0.0) [-12.7|12.7] "m/s2" ECU_BODY
+ SG_ LongitudinalAccel : 32|8@1- (0.1,0.0) [-12.7|12.7] "m/s2" ECU_BODY
+ SG_ ABSActive : 40|1@1+ (1.0,0.0) [0|1] "" ECU_ENGINE
+
+BO_ 688 TRANSMISSION_STATUS: 4 ECU_TRANSMISSION
+ SG_ GearPosition : 0|4@1+ (1.0,0.0) [0|8] "" ECU_ENGINE,ECU_BODY
+ SG_ TorqueConverterSlip : 8|8@1+ (1.0,0.0) [0|100] "%" ECU_ENGINE
+ SG_ TransmissionTemp : 16|8@1+ (1.0,-40.0) [-40|215] "degC" ECU_BODY
+
+BO_ 960 BODY_CONTROL: 2 ECU_BODY
+ SG_ LeftTurnSignal : 0|1@1+ (1.0,0.0) [0|1] "" Vector__XXX
+ SG_ RightTurnSignal : 1|1@1+ (1.0,0.0) [0|1] "" Vector__XXX
+ SG_ HeadlightsOn : 2|1@1+ (1.0,0.0) [0|1] "" Vector__XXX
+ SG_ FogLightsOn : 3|1@1+ (1.0,0.0) [0|1] "" Vector__XXX
+ SG_ HazardLightsOn : 4|1@1+ (1.0,0.0) [0|1] "" Vector__XXX
+ SG_ WipersActive : 5|1@1+ (1.0,0.0) [0|1] "" Vector__XXX
+ SG_ AmbientTemp : 8|8@1- (0.5,-40.0) [-40|87.5] "degC" Vector__XXX
+
+/*
+ * =========================================================
+ * UDS DIAGNOSTIC MESSAGES — from real .asc file
+ *
+ * 0x6F8 and 0x6F9 are a UDS tester/ECU pair for a specific ECU.
+ *
+ * UDS ID ADDRESSING PATTERN:
+ *   Physical request:  0x600 + ECU_address  → tester → ECU
+ *   Physical response: 0x600 + ECU_address + 8 → ECU → tester
+ *
+ *   So: 0x6F8 = tester addressing ECU at 0xF8 (248 decimal)
+ *       0x6F9 = that ECU responding (0xF8 + 1 = 0xF9)
+ *
+ * ISO-TP FRAMING (first byte = PCI field):
+ *   0x0N = Single Frame, N = payload length (1-7 bytes)
+ *   0x1N NN = First Frame of multi-frame, NN = total length
+ *   0x2N = Consecutive Frame, N = sequence number
+ *   0x3N = Flow Control frame
+ *
+ * Your actual bytes:
+ *   6F9: 05 0C 00 00 00 00 00 00
+ *        │  │  └──────────────── data bytes
+ *        │  └─────────────────── UDS service byte
+ *        └────────────────────── PCI=0x05: single frame, 5 payload bytes
+ *
+ *   6F8: FF 00 0C FE 00 00 00 00
+ *        │     │  └────────────── status/response code
+ *        │     └──────────────── echoed service byte (0x0C)
+ *        └────────────────────── 0xFF = ISO-TP padding byte
+ * =========================================================
+ */
+
+BO_ 1785 DIAG_ECU_RESPONSE: 8 ECU_DIAG
+ /*
+  * 0x6F9 = 1785 decimal — ECU diagnostic response
+  *
+  * Byte 0: ISO-TP PCI field
+  *   Upper nibble: frame type (0=single, 1=first, 2=consecutive, 3=flow)
+  *   Lower nibble: payload length (for single frame)
+  *
+  * Byte 1: UDS Service ID
+  *   Standard UDS services:
+  *   0x10 = DiagnosticSessionControl
+  *   0x11 = ECUReset
+  *   0x22 = ReadDataByIdentifier
+  *   0x27 = SecurityAccess
+  *   0x2E = WriteDataByIdentifier
+  *   0x3E = TesterPresent
+  *   0x7F = NegativeResponse
+  *   0x0C = not standard UDS — proprietary service (common in OEM ECUs)
+  *
+  * Bytes 2-4: response payload (service-specific)
+  * Byte 5-7: padding (0x00)
+  */
+ SG_ IsoTp_PCI : 0|8@1+ (1.0,0.0) [0|255] "" TESTER
+ SG_ UDS_ServiceID : 8|8@1+ (1.0,0.0) [0|255] "" TESTER
+ SG_ ResponseByte1 : 16|8@1+ (1.0,0.0) [0|255] "" TESTER
+ SG_ ResponseByte2 : 24|8@1+ (1.0,0.0) [0|255] "" TESTER
+ SG_ ResponseByte3 : 32|8@1+ (1.0,0.0) [0|255] "" TESTER
+ SG_ ResponseByte4 : 40|8@1+ (1.0,0.0) [0|255] "" TESTER
+
+BO_ 1784 DIAG_TESTER_REQUEST: 8 TESTER
+ /*
+  * 0x6F8 = 1784 decimal — tester diagnostic request to ECU
+  *
+  * Byte 0: 0xFF = ISO-TP padding (common when DLC must be 8 but payload is short)
+  * Byte 1: 0x00 = padding
+  * Byte 2: 0x0C = service ID being requested (mirrors ECU response)
+  * Byte 3: 0xFE = sub-function or negative response code
+  *   UDS negative response codes:
+  *   0x10 = generalReject
+  *   0x11 = serviceNotSupported
+  *   0x22 = conditionsNotCorrect
+  *   0x31 = requestOutOfRange
+  *   0xFE = not standard — likely proprietary status byte
+  * Bytes 4-7: padding
+  */
+ SG_ Padding0 : 0|8@1+ (1.0,0.0) [0|255] "" ECU_DIAG
+ SG_ Padding1 : 8|8@1+ (1.0,0.0) [0|255] "" ECU_DIAG
+ SG_ Request_ServiceID : 16|8@1+ (1.0,0.0) [0|255] "" ECU_DIAG
+ SG_ Request_SubFunction : 24|8@1+ (1.0,0.0) [0|255] "" ECU_DIAG
+ SG_ RequestByte1 : 32|8@1+ (1.0,0.0) [0|255] "" ECU_DIAG
+ SG_ RequestByte2 : 40|8@1+ (1.0,0.0) [0|255] "" ECU_DIAG
+
+
+/*
+ * =========================================================
+ * VALUE TABLES
+ * =========================================================
+ */
+VAL_ 688 GearPosition
+  0 "Park" 1 "Reverse" 2 "Neutral" 3 "Drive"
+  4 "First" 5 "Second" 6 "Third" 7 "Fourth" 8 "Fifth" ;
+
+VAL_ 1785 IsoTp_PCI
+  0 "SingleFrame_0bytes" 1 "SingleFrame_1byte" 2 "SingleFrame_2bytes"
+  3 "SingleFrame_3bytes" 4 "SingleFrame_4bytes" 5 "SingleFrame_5bytes"
+  6 "SingleFrame_6bytes" 7 "SingleFrame_7bytes"
+  16 "FirstFrame" 32 "ConsecutiveFrame" 48 "FlowControl" ;
+
+VAL_ 1785 UDS_ServiceID
+  16 "DiagnosticSessionControl"
+  17 "ECUReset"
+  34 "ReadDataByIdentifier"
+  39 "SecurityAccess"
+  46 "WriteDataByIdentifier"
+  62 "TesterPresent"
+  127 "NegativeResponse"
+  12 "Proprietary_0x0C" ;
+
+VAL_ 1784 Request_ServiceID
+  16 "DiagnosticSessionControl"
+  17 "ECUReset"
+  34 "ReadDataByIdentifier"
+  39 "SecurityAccess"
+  46 "WriteDataByIdentifier"
+  62 "TesterPresent"
+  127 "NegativeResponse"
+  12 "Proprietary_0x0C" ;
+
+
+/*
+ * =========================================================
+ * COMMENTS
+ * =========================================================
+ */
+CM_ BO_ 1785 "UDS ECU response. ID=0x6F9. ECU at address 0xF9 responding to tester.";
+CM_ BO_ 1784 "UDS tester request. ID=0x6F8. Tester addressing ECU at 0xF8.";
+CM_ SG_ 1785 IsoTp_PCI "ISO-TP Protocol Control Information. Upper nibble=frame type, lower nibble=length.";
+CM_ SG_ 1785 UDS_ServiceID "UDS service identifier. See VAL_ table for service names.";
+CM_ SG_ 1785 ResponseByte1 "First payload byte after service ID. Interpretation is service-specific.";
+CM_ SG_ 1784 Request_ServiceID "UDS service being requested. 0x0C is proprietary to this ECU.";
+CM_ SG_ 1784 Request_SubFunction "Sub-function or parameter byte. 0xFE likely proprietary status.";
+CM_ SG_ 200 EngineRPM "Engine speed in RPM. Redline at 6500.";
+CM_ SG_ 200 CoolantTemp "Engine coolant temp. Normal range 85-105 degC.";
+CM_ SG_ 420 VehicleSpeed "Wheel-speed-derived vehicle speed. Used by ABS and cruise control.";
+CM_ SG_ 420 ABSActive "1 when ABS is actively pulsing brake pressure.";
+CM_ SG_ 688 GearPosition "Current gear. See VAL_ table for enum mapping.";

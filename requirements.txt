@@ -1,0 +1,7 @@
+python-can>=4.3.0
+cantools>=39.4.0
+kafka-python>=2.0.2
+paho-mqtt>=1.6.1
+flask>=3.0.0
+influxdb-client>=1.38.0
+watchdog>=3.0.0
