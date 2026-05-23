@@ -117,7 +117,7 @@ class MQTTWatcher:
             except Exception as e:
                 log.error(f"MQTT error: {e}")
 
-        client = mqtt.Client(client_id="can-edge-processor")
+        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, client_id="can-edge-processor")
         client.on_connect = on_connect
         client.on_message = on_message
         client.connect(self.broker, self.port)
