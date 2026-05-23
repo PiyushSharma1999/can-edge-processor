@@ -171,29 +171,24 @@ def generate_asc_file(output_path, duration_seconds, error_rate):
     messages, error_lines = [], []
     dt, t = 0.001, 0.0
 
-    while t < duration_seconds:
+    steps = int(duration_seconds / dt)
+    for i in range(steps):
+        t = i * dt
+        state.time = t
         state.update(dt)
 
-        if t >= next_tx['engine']:
+        if i % 10 == 0:    # every 10ms = 100Hz — engine + vehicle
             messages.append(builder.encode_engine(state))
-            next_tx['engine'] += rates['engine']
-
-        if t >= next_tx['vehicle_dyn']:
             messages.append(builder.encode_vehicle_dynamics(state))
-            next_tx['vehicle_dyn'] += rates['vehicle_dyn']
 
-        if t >= next_tx['transmission']:
+        if i % 20 == 0:    # every 20ms = 50Hz — transmission
             messages.append(builder.encode_transmission(state))
-            next_tx['transmission'] += rates['transmission']
 
-        if t >= next_tx['body']:
+        if i % 100 == 0:   # every 100ms = 10Hz — body
             messages.append(builder.encode_body_control(state))
-            next_tx['body'] += rates['body']
 
         if random.random() < error_rate * dt:
             error_lines.append(builder.make_error_frame_line(t))
-
-        t += dt
     
     os.makedirs(os.path.dirname(output_path) if os.path.dirname(output_path) else ".", exist_ok=True)
 
