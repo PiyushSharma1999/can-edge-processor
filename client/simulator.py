@@ -193,7 +193,7 @@ def generate_asc_file(output_path, duration_seconds, error_rate):
     os.makedirs(os.path.dirname(output_path) if os.path.dirname(output_path) else ".", exist_ok=True)
 
     with can.ASCWriter(output_path) as writer:
-        for msg in sorted(msg, key=lambda m : m.timestamp):
+        for msg in sorted(messages, key=lambda m : m.timestamp):
             writer.on_message_received(msg)
     
     if error_lines:
