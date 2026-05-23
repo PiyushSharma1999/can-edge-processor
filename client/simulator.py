@@ -169,7 +169,7 @@ def generate_asc_file(output_path, duration_seconds, error_rate):
     next_tx = {k: 0.0 for k in rates}
 
     messages, error_lines = [], []
-    dt, t = 0.001, 0,0
+    dt, t = 0.001, 0.0
 
     while t < duration_seconds:
         state.update(dt)
