@@ -46,6 +46,7 @@ class CANKafkaProducer:
     def __init__(self, bootstrap_servers: str = "localhost:9092"):
         self._dry_run = not KAFKA_AVAILABLE
         self.stats    = {"sent": 0, "errors": 0, "by_topic": {}}
+        self.producer = None
 
         if KAFKA_AVAILABLE:
             try:
@@ -56,11 +57,15 @@ class CANKafkaProducer:
                     retries=3,
                     acks="all",
                     linger_ms=1,
+                    # These two lines stop it from hanging/crashing on connect
+                    request_timeout_ms=5000,
+                    connections_max_idle_ms=10000,
                 )
                 log.info(f"Kafka connected: {bootstrap_servers}")
             except Exception as e:
-                log.error(f"Kafka connect failed: {e}")
+                log.warning(f"Kafka unavailable ({e}) — running in dry-run mode")
                 self._dry_run = True
+                self.producer = None
         else:
             log.info("kafka-python not installed — dry-run mode")
 
