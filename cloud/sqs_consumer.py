@@ -8,7 +8,7 @@ them to InfluxDB as time-series data points.
 import json
 import logging
 import os
-import time
+import time as time_module
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO,
@@ -62,7 +62,7 @@ class InfluxWriter:
 
         msg_name = frame.get("message_name", "UNKNOWN")
         arb_id   = frame.get("arbitration_id_hex", "0x000")
-        ts_ns    = int(frame.get("timestamp", 0) * 1e9)
+        ts_ns    = ts_ns = int(time_module.time() * 1e9)
 
         points = []
         for sig_name, value in frame["signals"].items():
@@ -144,7 +144,7 @@ def run_consumer():
         total += batch
         if batch > 0:
             log.info(f"Processed {batch} frames (total: {total})")
-        time.sleep(1)
+        time_module.sleep(1)
 
 
 if __name__ == "__main__":
