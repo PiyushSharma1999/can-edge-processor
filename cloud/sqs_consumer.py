@@ -30,9 +30,9 @@ except ImportError:
     INFLUX_AVAILABLE = False
     log.warning("influxdb-client not installed — dry-run mode")
 
-SQS_HIGH_URL   = os.getenv("SQS_HIGH_URL",   "")
-SQS_MEDIUM_URL = os.getenv("SQS_MEDIUM_URL", "")
-SQS_LOW_URL    = os.getenv("SQS_LOW_URL",    "")
+SQS_HIGH_URL   = os.getenv("SQS_HIGH_URL",   "https://sqs.us-east-1.amazonaws.com/295690253730/can-high-priority")
+SQS_MEDIUM_URL = os.getenv("SQS_MEDIUM_URL", "https://sqs.us-east-1.amazonaws.com/295690253730/can-medium-priority")
+SQS_LOW_URL    = os.getenv("SQS_LOW_URL",    "https://sqs.us-east-1.amazonaws.com/295690253730/can-low-priority")
 QUEUE_URLS     = [SQS_HIGH_URL, SQS_MEDIUM_URL, SQS_LOW_URL]
 QUEUE_NAMES    = ["high", "medium", "low"]
 
