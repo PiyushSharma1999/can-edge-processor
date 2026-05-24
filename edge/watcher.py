@@ -21,7 +21,7 @@ logging.basicConfig(level=logging.INFO,
 sys.path.insert(0, os.path.dirname(__file__))
 from parser import CANParser
 from filter import CANFilter
-from kafka_producer import CANKafkaProducer
+from edge.sqs_producer import CANSQSProducer
 
 try:
     from watchdog.observers import Observer
@@ -40,10 +40,10 @@ except ImportError:
 class ASCPipeline:
     """Runs parse → filter → kafka for a single .asc file."""
 
-    def __init__(self, dbc_path: str, kafka_servers: str):
+    def __init__(self, dbc_path: str):
         self.parser   = CANParser(dbc_path)
         self.flt      = CANFilter(drop_error_frames=True, validate_ranges=True)
-        self.producer = CANKafkaProducer(kafka_servers)
+        self.producer = CANSQSProducer()
         self.processed = set()
 
     def run(self, asc_path: str):
