@@ -72,7 +72,7 @@ class InfluxWriter:
                     .tag("signal", sig_name)
                     .tag("arbitration_id", arb_id)
                     .field("value", float(value))
-                    .time(ts_ns, WritePrecision.NANOSECONDS)
+                    .time(ts_ns, WritePrecision.NS)
                 )
 
         if not points:
