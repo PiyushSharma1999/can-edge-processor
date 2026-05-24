@@ -1,10 +1,10 @@
 """
-sqs_producer.py — SQS Producer (replaces Kafka)
+sqs_producer.py — SQS Producer (Core EC2 Edge Layer)
 
 Priority queue mapping mirrors CAN bus arbitration:
-  0x0C8, 0x1A4 → can-high-priority
-  0x2B0        → can-medium-priority
-  0x3C0        → can-low-priority
+  0x0C8, 0x1A4 (engine, vehicle) -> can-high-priority
+  0x2B0        (transmission)    -> can-medium-priority
+  0x3C0        (body)            -> can-low-priority
 """
 
 import json
@@ -40,6 +40,7 @@ class CANSQSProducer:
     def __init__(self):
         self._dry_run = not SQS_AVAILABLE
         self.stats = {"sent": 0, "errors": 0, "by_queue": {}}
+        self.sqs = None
 
         if SQS_AVAILABLE:
             try:
@@ -51,99 +52,76 @@ class CANSQSProducer:
         else:
             log.info("boto3 not installed — dry-run mode")
 
-    def _get_queue_url(self, frame) -> str:
-        priority = PRIORITY_MAP.get(frame.arbitration_id, "low")
-        return QUEUE_URLS.get(priority, ""), priority
-
-    def send_frame(self, frame) -> bool:
-        queue_url, priority = self._get_queue_url(frame)
-        payload = json.dumps(asdict(frame))
-
-        if self._dry_run or not queue_url:
-            log.debug(f"[dry-run] → {priority} | {frame.message_name}")
-            self.stats["sent"] += 1
-            self.stats["by_queue"][priority] = self.stats["by_queue"].get(priority, 0) + 1
-            return True
-
-        try:
-            self.sqs.send_message(
-                QueueUrl=queue_url,
-                MessageBody=payload,
-                MessageAttributes={
-                    "arbitration_id": {
-                        "StringValue": frame.arbitration_id_hex,
-                        "DataType": "String"
-                    },
-                    "message_name": {
-                        "StringValue": frame.message_name,
-                        "DataType": "String"
-                    }
-                }
-            )
-            self.stats["sent"] += 1
-            self.stats["by_queue"][priority] = self.stats["by_queue"].get(priority, 0) + 1
-            return True
-
-        except ClientError as e:
-            log.error(f"SQS send error: {e}")
-            self.stats["errors"] += 1
-            return False
+    def _get_priority(self, frame) -> str:
+        return PRIORITY_MAP.get(frame.arbitration_id, "low")
 
     def send_frames(self, frames: list) -> int:
-        # SQS supports batch send of up to 10 messages at a time
-        sent = 0
-        batch = []
+        if not frames:
+            return 0
 
+        by_priority = {"high": [], "medium": [], "low": []}
         for frame in frames:
-            queue_url, priority = self._get_queue_url(frame)
+            by_priority[self._get_priority(frame)].append(frame)
+
+        total_sent = 0
+        for priority, pframes in by_priority.items():
+            if not pframes:
+                continue
+            queue_url = QUEUE_URLS.get(priority, "")
+            total_sent += self._send_batch(pframes, queue_url, priority)
+
+        log.info(f"SQS: sent {total_sent}/{len(frames)}")
+        return total_sent
+
+    def _send_batch(self, frames: list, queue_url: str, priority: str) -> int:
+        sent = 0
+        for i in range(0, len(frames), 10):
+            chunk = frames[i:i + 10]
 
             if self._dry_run or not queue_url:
-                self.send_frame(frame)
-                sent += 1
+                for frame in chunk:
+                    log.debug(f"[dry-run] -> {priority} | {frame.message_name}")
+                    self.stats["sent"] += 1
+                    self.stats["by_queue"][priority] = \
+                        self.stats["by_queue"].get(priority, 0) + 1
+                sent += len(chunk)
                 continue
 
-            batch.append((frame, queue_url, priority))
-
-            # Flush batch of 10
-            if len(batch) >= 10:
-                sent += self._flush_batch(batch)
-                batch = []
-
-        # Flush remaining
-        if batch:
-            sent += self._flush_batch(batch)
-
-        log.info(f"SQS: sent {sent}/{len(frames)}")
-        return sent
-
-    def _flush_batch(self, batch: list) -> int:
-        # Group by queue URL
-        by_queue: dict = {}
-        for frame, queue_url, priority in batch:
-            by_queue.setdefault(queue_url, []).append((frame, priority))
-
-        sent = 0
-        for queue_url, items in by_queue.items():
-            entries = [
-                {
-                    "Id": str(i),
-                    "MessageBody": json.dumps(asdict(frame)),
-                }
-                for i, (frame, _) in enumerate(items)
-            ]
             try:
+                entries = [
+                    {
+                        "Id": str(idx),
+                        "MessageBody": json.dumps(asdict(frame)),
+                        "MessageAttributes": {
+                            "message_name": {
+                                "StringValue": frame.message_name,
+                                "DataType": "String"
+                            },
+                            "arbitration_id": {
+                                "StringValue": frame.arbitration_id_hex,
+                                "DataType": "String"
+                            }
+                        }
+                    }
+                    for idx, frame in enumerate(chunk)
+                ]
                 resp = self.sqs.send_message_batch(
-                    QueueUrl=queue_url,
-                    Entries=entries
-                )
-                sent += len(resp.get("Successful", []))
-                priority = items[0][1]
+                    QueueUrl=queue_url, Entries=entries)
+
+                ok  = len(resp.get("Successful", []))
+                err = len(resp.get("Failed", []))
+                sent += ok
+                self.stats["sent"]   += ok
+                self.stats["errors"] += err
                 self.stats["by_queue"][priority] = \
-                    self.stats["by_queue"].get(priority, 0) + len(resp.get("Successful", []))
-                self.stats["sent"] += len(resp.get("Successful", []))
+                    self.stats["by_queue"].get(priority, 0) + ok
+
+                if err:
+                    log.warning(f"SQS: {err} failed in {priority} queue")
+
             except ClientError as e:
-                log.error(f"SQS batch error: {e}")
-                self.stats["errors"] += len(entries)
+                log.error(f"SQS batch error ({priority}): {e}")
+                self.stats["errors"] += len(chunk)
 
         return sent
 

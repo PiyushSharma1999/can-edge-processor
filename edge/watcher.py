@@ -3,7 +3,7 @@ watcher.py — Orchestrator (Core EC2 / Greengrass Component)
 
 Three trigger modes:
   file   — process a single .asc file directly (dev/testing)
-  folder — watch a directory for new .asc files (like Tesla's FTP watcher)
+  folder — watch a directory for new .asc files
   mqtt   — receive file-ready notifications over MQTT from client device
 """
 
@@ -18,10 +18,12 @@ log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s [watcher] %(levelname)s %(message)s")
 
-sys.path.insert(0, os.path.dirname(__file__))
+# FIX: use abspath so imports work regardless of working directory
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from parser import CANParser
 from filter import CANFilter
-from edge.sqs_producer import CANSQSProducer
+from sqs_producer import CANSQSProducer
 
 try:
     from watchdog.observers import Observer
@@ -38,16 +40,16 @@ except ImportError:
 
 
 class ASCPipeline:
-    """Runs parse → filter → kafka for a single .asc file."""
-
+    # FIX: removed kafka_servers arg — no longer needed
     def __init__(self, dbc_path: str):
-        self.parser   = CANParser(dbc_path)
-        self.flt      = CANFilter(drop_error_frames=True, validate_ranges=True)
-        self.producer = CANSQSProducer()
+        self.parser    = CANParser(dbc_path)
+        self.flt       = CANFilter(drop_error_frames=True, validate_ranges=True)
+        self.producer  = CANSQSProducer()
         self.processed = set()
 
     def run(self, asc_path: str):
         if asc_path in self.processed:
+            log.info(f"Already processed: {asc_path} — skipping")
             return
         self.processed.add(asc_path)
         log.info(f"━━━ Processing: {asc_path} ━━━")
@@ -57,7 +59,8 @@ class ASCPipeline:
             sent   = self.producer.send_frames(clean)
             self.flt.print_stats()
             self.producer.print_stats()
-            log.info(f"━━━ Done: {sent} frames sent to Kafka ━━━\n")
+            # FIX: was "sent to Kafka"
+            log.info(f"━━━ Done: {sent} frames sent to SQS ━━━\n")
         except Exception as e:
             log.error(f"Pipeline error: {e}", exc_info=True)
 
@@ -77,6 +80,7 @@ class FolderWatcher:
                 self.pipeline = pipeline
             def on_created(self, event):
                 if not event.is_directory and event.src_path.endswith(".asc"):
+                    log.info(f"New file detected: {event.src_path}")
                     time.sleep(0.5)
                     self.pipeline.run(event.src_path)
 
@@ -93,7 +97,7 @@ class FolderWatcher:
 
 
 class MQTTWatcher:
-    def __init__(self, broker, port, topic, pipeline: ASCPipeline):
+    def __init__(self, broker: str, port: int, topic: str, pipeline: ASCPipeline):
         self.broker   = broker
         self.port     = port
         self.topic    = topic
@@ -117,7 +121,8 @@ class MQTTWatcher:
             except Exception as e:
                 log.error(f"MQTT error: {e}")
 
-        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, client_id="can-edge-processor")
+        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1,
+                             client_id="can-edge-processor")
         client.on_connect = on_connect
         client.on_message = on_message
         client.connect(self.broker, self.port)
@@ -127,22 +132,24 @@ class MQTTWatcher:
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--dbc",         default="dbc/vehicle.dbc")
-    ap.add_argument("--kafka",       default="localhost:9092")
-    ap.add_argument("--mode",        choices=["file","folder","mqtt"], default="file")
-    ap.add_argument("--watch-dir",   default="data/")
+    ap.add_argument("--mode",        choices=["file", "folder", "mqtt"], default="folder")
+    ap.add_argument("--watch-dir",   default="/tmp/can-data/")
     ap.add_argument("--mqtt-broker", default="localhost")
     ap.add_argument("--mqtt-port",   type=int, default=1883)
     ap.add_argument("--mqtt-topic",  default="can/new-file")
     ap.add_argument("--asc",         default=None)
     args = ap.parse_args()
 
-    pipeline = ASCPipeline(args.dbc, args.kafka)
+    # FIX: ASCPipeline takes only dbc_path now
+    pipeline = ASCPipeline(args.dbc)
 
     if args.mode == "file":
         if not args.asc:
             ap.error("--asc required for mode=file")
         pipeline.run(args.asc)
     elif args.mode == "folder":
+        os.makedirs(args.watch_dir, exist_ok=True)
         FolderWatcher(args.watch_dir, pipeline).start()
     elif args.mode == "mqtt":
-        MQTTWatcher(args.mqtt_broker, args.mqtt_port, args.mqtt_topic, pipeline).start()
+        MQTTWatcher(args.mqtt_broker, args.mqtt_port,
+                    args.mqtt_topic, pipeline).start()
