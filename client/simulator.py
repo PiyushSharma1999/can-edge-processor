@@ -120,7 +120,8 @@ class CANFrameBuilder:
                     lat_raw & 0xFF,
                     lon_raw & 0xFF,
                     abs_byte,
-                    0x00
+                    0x00,
+                    0x00   # padding to reach DLC=8
                 ])
         return can.Message(arbitration_id=MSG_VEHICLE_DYN, data=data,
                            is_extended_id=False, timestamp=state.time)
