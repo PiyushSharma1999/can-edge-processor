@@ -115,8 +115,13 @@ class CANFrameBuilder:
         lon_raw   = int(max(-127, min(127, state.long_accel / 0.1)))
         abs_byte  = 0x01 if state.abs_active else 0x00
 
-        data = struct.pack('<H', speed_raw) + struct.pack('BBbbB',
-            brake_raw, lat_raw & 0xFF, lon_raw & 0xFF, abs_byte, 0x00)
+        data = struct.pack('<H', speed_raw) + bytes([
+                    brake_raw & 0xFF,
+                    lat_raw & 0xFF,
+                    lon_raw & 0xFF,
+                    abs_byte,
+                    0x00
+                ])
         return can.Message(arbitration_id=MSG_VEHICLE_DYN, data=data,
                            is_extended_id=False, timestamp=state.time)
     
