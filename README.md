@@ -166,25 +166,25 @@ In this project, `aws iot create-keys-and-certificate` generated `device.pem.crt
 ```
 ┌──────────────────────────────────┐         ┌─────────────────────────────────────┐
 │      Client EC2 (Ubuntu)         │         │   Core EC2 — AWS IoT Greengrass     │
-│   "IoT-CAN-Client" thing          │         │   "IoT-CAN-Core" thing              │
+│   "IoT-CAN-Client" thing         │         │   "IoT-CAN-Core" thing              │
 │                                  │         │                                     │
-│  ┌────────────────────────────┐  │  mTLS   │  ┌──────────────────────────────┐  │
-│  │  simulator.py              │  │  8883   │  │  Moquette (MQTT broker)      │  │
-│  │  - VehicleState model      │  │ ──────► │  │  + Client Device Auth        │  │
-│  │  - CANFrameBuilder         │  │         │  │  + MQTT Bridge → Pubsub      │  │
-│  │  - generate .asc file      │  │         │  └────────────┬─────────────────┘  │
+│  ┌────────────────────────────┐  │  mTLS   │  ┌──────────────────────────────┐   │
+│  │  simulator.py              │  │  8883   │  │  Moquette (MQTT broker)      │   │
+│  │  - VehicleState model      │  │ ──────► │  │  + Client Device Auth        │   │
+│  │  - CANFrameBuilder         │  │         │  │  + MQTT Bridge → Pubsub      │   │
+│  │  - generate .asc file      │  │         │  └────────────┬─────────────────┘   │
 │  │  - publisher.py (discovery │  │         │               │ Greengrass IPC      │
-│  │    + mTLS publish)         │  │         │  ┌────────────▼─────────────────┐  │
-│  └────────────────────────────┘  │         │  │  com.canpipeline.CANProcessor│  │
-└──────────────────────────────────┘         │  │  (custom Greengrass         │  │
-                                              │  │   component, watcher.py)    │  │
-                                              │  │                              │  │
-                                              │  │  watcher → parser → filter   │  │
-                                              │  │           → sqs_producer     │  │
-                                              │  └────────────┬─────────────────┘  │
-                                              └───────────────┼────────────────────┘
-                                                              │ boto3 send_message_batch
-                                                              ▼
+│  │    + mTLS publish)         │  │         │  ┌────────────▼────────────────-─┐  │
+│  └────────────────────────────┘  │         │  │  com.canpipeline.CANProcessor │  │
+└──────────────────────────────────┘         │  │  (custom Greengrass           │  │
+                                             │  │   component, watcher.py)      │  │
+                                             │  │                               │  │
+                                             │  │  watcher → parser → filter    │  │
+                                             │  │           → sqs_producer      │  │
+                                             │  └────────────┬────────────────-─┘  │
+                                             └───────────────┼─────────────────-───┘
+                                                             │ boto3 send_message_batch
+                                                             ▼
                                               ┌───────────────────────────────────┐
                                               │  AWS SQS (3 priority queues)      │
                                               │  ┌─────────┐ ┌─────────┐ ┌──────┐ │
