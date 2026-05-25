@@ -48,7 +48,7 @@ def publish_asc(asc_path, thing_name, topic, ca_file, cert, key, region="us-east
                         cert_filepath=cert,
                         pri_key_filepath=key,
                         ca_bytes=group.certificate_authorities[0].encode("utf-8"),
-                        client_id=thing_name,
+                        client_id=f"{thing_name}-pub-{uuid.uuid4().hex[:8]}",
                         clean_session=True,
                         keep_alive_secs=30,
                     )
