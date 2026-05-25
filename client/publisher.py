@@ -41,6 +41,8 @@ def publish_asc(asc_path, thing_name, topic, ca_file, cert, key, region="us-east
     for group in resp.gg_groups:
         for core in group.cores:
             for conn in core.connectivity:
+                if conn.host_address.startswith("127.") or conn.host_address == "localhost":
+                    continue
                 try:
                     mqtt_conn = mqtt_connection_builder.mtls_from_path(
                         endpoint=conn.host_address,
@@ -48,7 +50,7 @@ def publish_asc(asc_path, thing_name, topic, ca_file, cert, key, region="us-east
                         cert_filepath=cert,
                         pri_key_filepath=key,
                         ca_bytes=group.certificate_authorities[0].encode("utf-8"),
-                        client_id=f"{thing_name}-pub-{uuid.uuid4().hex[:8]}",
+                        client_id=thing_name,
                         clean_session=True,
                         keep_alive_secs=30,
                     )
