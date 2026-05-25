@@ -3,16 +3,7 @@ import math
 import os
 import random
 import struct
-import time
-import json
 import argparse
-from datetime import datetime
-
-try:
-    import paho.mqtt.client as mqtt
-    MQTT_AVAILABLE = True
-except ImportError:
-    MQTT_AVAILABLE = False
 
 # Arbitration IDs — lower = higher priority
 MSG_ENGINE       = 0x0C8   # 200 decimal — highest priority
@@ -209,50 +200,22 @@ def generate_asc_file(output_path, duration_seconds, error_rate):
     print(f"[simulator] {len(messages)} frames + {len(error_lines)} error frames → {output_path}")
     return output_path
 
-def publish_via_mqtt(asc_path, broker, port, topic):
-    if not MQTT_AVAILABLE:
-        print("[simulator] paho-mqtt not installed — skipping MQTT")
-        return
-
-    import base64
-
-    # Read and encode the .asc file
-    with open(asc_path, "rb") as f:
-        encoded = base64.b64encode(f.read()).decode("utf-8")
-
-    filename = os.path.basename(asc_path)
-
-    payload = json.dumps({
-        "encoded":      encoded,
-        "filename":     filename,
-        "generated_at": datetime.utcnow().isoformat(),
-        "source":       "IoT-CAN-Client"
-    })
-
-    try:
-        client = mqtt.Client(
-            mqtt.CallbackAPIVersion.VERSION1,
-            client_id="can-simulator"
-        )
-        client.connect(broker, port, keepalive=60)
-        result = client.publish(topic, payload, qos=1)
-        result.wait_for_publish()
-        client.disconnect()
-        print(f"[simulator] Published {filename} ({len(encoded)} bytes) → {topic}")
-    except Exception as e:
-        print(f"[simulator] MQTT publish failed: {e}")
-
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--output",      default="data/simulated.asc")
-    ap.add_argument("--duration",    type=float, default=10.0)
-    ap.add_argument("--errors",      type=float, default=0.02)
-    ap.add_argument("--mqtt-broker", default="localhost")
-    ap.add_argument("--mqtt-port",   type=int, default=1883)
-    ap.add_argument("--mqtt-topic",  default="can/new-file")
-    ap.add_argument("--no-mqtt",     action="store_true")
+    ap.add_argument("--output",     default="data/simulated.asc")
+    ap.add_argument("--duration",   type=float, default=10.0)
+    ap.add_argument("--errors",     type=float, default=0.02)
+    ap.add_argument("--thing-name", default="IoT-CAN-Client")
+    ap.add_argument("--topic",      default="clients/IoT-CAN-Client")
+    ap.add_argument("--ca",         default=os.path.expanduser("~/can-certs/AmazonRootCA1.pem"))
+    ap.add_argument("--cert",       default=os.path.expanduser("~/can-certs/device.pem.crt"))
+    ap.add_argument("--key",        default=os.path.expanduser("~/can-certs/private.pem.key"))
+    ap.add_argument("--region",     default="us-east-1")
+    ap.add_argument("--no-publish", action="store_true")
     args = ap.parse_args()
 
     path = generate_asc_file(args.output, args.duration, args.errors)
-    if not args.no_mqtt:
-        publish_via_mqtt(path, args.mqtt_broker, args.mqtt_port, args.mqtt_topic)
+    if not args.no_publish:
+        from publisher import publish_asc
+        publish_asc(path, args.thing_name, args.topic,
+                    args.ca, args.cert, args.key, args.region)
