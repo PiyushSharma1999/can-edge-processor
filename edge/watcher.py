@@ -97,36 +97,64 @@ class FolderWatcher:
 
 
 class MQTTWatcher:
-    def __init__(self, broker: str, port: int, topic: str, pipeline: ASCPipeline):
-        self.broker   = broker
-        self.port     = port
+    def __init__(self, topic: str, pipeline):
         self.topic    = topic
         self.pipeline = pipeline
 
     def start(self):
-        if not MQTT_AVAILABLE:
-            log.error("pip install paho-mqtt")
-            return
+        import awsiot.greengrasscoreipc
+        import awsiot.greengrasscoreipc.client as client
+        from awsiot.greengrasscoreipc.model import (
+            SubscribeToTopicRequest,
+            SubscriptionResponseMessage
+        )
 
-        def on_connect(client, userdata, flags, rc):
-            client.subscribe(self.topic, qos=1)
-            log.info(f"MQTT subscribed: {self.topic}")
+        ipc_client = awsiot.greengrasscoreipc.connect()
 
-        def on_message(client, userdata, msg):
-            try:
-                payload  = json.loads(msg.payload.decode())
-                asc_path = payload.get("asc_file")
-                if asc_path:
-                    self.pipeline.run(asc_path)
-            except Exception as e:
-                log.error(f"MQTT error: {e}")
+        class StreamHandler(client.SubscribeToTopicStreamHandler):
+            def __init__(self, pipeline):
+                super().__init__()
+                self.pipeline = pipeline
 
-        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1,
-                             client_id="can-edge-processor")
-        client.on_connect = on_connect
-        client.on_message = on_message
-        client.connect(self.broker, self.port)
-        client.loop_forever()
+            def on_stream_event(self, event: SubscriptionResponseMessage):
+                try:
+                    message = event.binary_message.message.decode("utf-8")
+                    payload = json.loads(message)
+
+                    encoded  = payload.get("encoded")
+                    filename = payload.get("filename", "received.asc")
+
+                    if encoded:
+                        import base64
+                        local_path = f"/tmp/can-data/{filename}"
+                        with open(local_path, "wb") as f:
+                            f.write(base64.b64decode(encoded))
+                        log.info(f"IPC: received file → {local_path}")
+                        self.pipeline.run(local_path)
+
+                except Exception as e:
+                    log.error(f"IPC message error: {e}", exc_info=True)
+
+            def on_stream_error(self, error):
+                log.error(f"IPC stream error: {error}")
+                return True  # keep stream open
+
+            def on_stream_closed(self):
+                log.info("IPC stream closed")
+
+        handler = StreamHandler(self.pipeline)
+        request = SubscribeToTopicRequest(topic=self.topic)
+        operation = ipc_client.new_subscribe_to_topic(handler)
+        operation.activate(request)
+
+        log.info(f"IPC subscribed to topic: {self.topic}")
+
+        # Keep running
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            operation.close()
 
 
 if __name__ == "__main__":
@@ -151,5 +179,4 @@ if __name__ == "__main__":
         os.makedirs(args.watch_dir, exist_ok=True)
         FolderWatcher(args.watch_dir, pipeline).start()
     elif args.mode == "mqtt":
-        MQTTWatcher(args.mqtt_broker, args.mqtt_port,
-                    args.mqtt_topic, pipeline).start()
+        MQTTWatcher(args.mqtt_topic, pipeline).start()
