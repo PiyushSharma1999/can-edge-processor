@@ -211,14 +211,36 @@ def generate_asc_file(output_path, duration_seconds, error_rate):
 
 def publish_via_mqtt(asc_path, broker, port, topic):
     if not MQTT_AVAILABLE:
+        print("[simulator] paho-mqtt not installed — skipping MQTT")
         return
-    client = mqtt.Client(client_id="can-simulator")
-    client.connect(broker, port)
-    payload = json.dumps({"asc_file": asc_path,
-                          "generated_at": datetime.utcnow().isoformat()})
-    client.publish(topic, payload, qos=1).wait_for_publish()
-    client.disconnect()
-    print(f"[simulator] Published MQTT -> {topic}")
+
+    import base64
+
+    # Read and encode the .asc file
+    with open(asc_path, "rb") as f:
+        encoded = base64.b64encode(f.read()).decode("utf-8")
+
+    filename = os.path.basename(asc_path)
+
+    payload = json.dumps({
+        "encoded":      encoded,
+        "filename":     filename,
+        "generated_at": datetime.utcnow().isoformat(),
+        "source":       "IoT-CAN-Client"
+    })
+
+    try:
+        client = mqtt.Client(
+            mqtt.CallbackAPIVersion.VERSION1,
+            client_id="can-simulator"
+        )
+        client.connect(broker, port, keepalive=60)
+        result = client.publish(topic, payload, qos=1)
+        result.wait_for_publish()
+        client.disconnect()
+        print(f"[simulator] Published {filename} ({len(encoded)} bytes) → {topic}")
+    except Exception as e:
+        print(f"[simulator] MQTT publish failed: {e}")
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
