@@ -58,7 +58,7 @@ def publish_asc(asc_path, thing_name, topic, ca_file, cert, key, region="us-east
                     pub_future, _ = mqtt_conn.publish(
                         topic=topic, payload=payload,
                         qos=mqtt.QoS.AT_LEAST_ONCE)
-                    pub_future.result()
+                    pub_future.result(timeout=15)
                     mqtt_conn.disconnect().result()
                     print(f"[publisher] published {os.path.basename(asc_path)} "
                           f"({len(payload)} bytes) → {conn.host_address}:{conn.port} / {topic}")
