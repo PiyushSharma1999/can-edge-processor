@@ -312,8 +312,6 @@ By doing **decode + filter on the edge**, we:
 - Keep the DBC + decoding logic on a single trusted device.
 - Could compute alerts locally (e.g., overspeed) without cloud round-trip — the cloud just stores history.
 
-This is the same architectural reason Tesla, Waymo, and modern fleet platforms put substantial compute next to the bus.
-
 ---
 
 ## 6. Repo layout
