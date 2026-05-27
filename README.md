@@ -216,6 +216,9 @@ In this project, `aws iot create-keys-and-certificate` generated `device.pem.crt
                                               └───────────────────────────────────┘
 ```
 
+<img width="3148" height="1756" alt="image" src="https://github.com/user-attachments/assets/2f797368-1719-4511-bd2c-57c40f9f4b56" />
+
+
 ### Why each piece exists
 
 #### Client side ([client/](client/))
